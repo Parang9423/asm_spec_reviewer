@@ -2,7 +2,9 @@ import { Link } from 'react-router-dom';
 import { useSpecStore } from '../stores/specStore';
 
 export function SpecListPage() {
-  const { specs, summary, uploadSpecFile } = useSpecStore();
+  const specs = useSpecStore((state) => state.specs);
+  const summary = useSpecStore((state) => state.summary);
+  const uploadSpec = useSpecStore((state) => state.uploadSpec);
 
   return (
     <section className="page">
@@ -19,7 +21,7 @@ export function SpecListPage() {
             hidden
             onChange={(event) => {
               const file = event.target.files?.[0];
-              if (file) uploadSpecFile(file);
+              if (file) void uploadSpec(file);
             }}
           />
         </label>
@@ -42,7 +44,7 @@ export function SpecListPage() {
           <tbody>
             {specs.map((spec) => (
               <tr key={spec.aiCode}>
-                <td><Link to={`/specs/${spec.aiCode}`}>{spec.aiCode}</Link></td>
+                <td><Link to={'/specs/' + spec.aiCode}>{spec.aiCode}</Link></td>
                 <td>{spec.defectName}</td>
                 <td>{spec.area}</td>
                 <td>{spec.side}</td>
