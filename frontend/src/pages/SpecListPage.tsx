@@ -4,6 +4,7 @@ import { useSpecStore } from '../stores/specStore';
 import type { CompareResult, GeneralSpec, ReviewRecord, SpecRow } from '../types/domain';
 
 type ReviewDraft = {
+  defectNameMes: string;
   generalSpecText: string;
   compareResult: CompareResult;
   note: string;
@@ -15,11 +16,14 @@ type ReviewDraft = {
   finalResult: string;
 };
 
+type ReviewTab = 'proposal' | 'discussion' | 'final';
+
 const compareOptions: CompareResult[] = ['NOT_REVIEWED', 'STRICTER', 'LOOSER', 'SAME', 'PARTIAL', 'NOT_COMPARABLE'];
 const API_BASE = '/api';
 
 function createDraft(): ReviewDraft {
   return {
+    defectNameMes: '',
     generalSpecText: '',
     compareResult: 'NOT_REVIEWED',
     note: '',
@@ -71,6 +75,11 @@ function buildReviewRecord(spec: SpecRow, draft: ReviewDraft): ReviewRecord {
   };
 }
 
+function selectedRowLabel(spec: SpecRow | null) {
+  if (!spec) return 'No row selected';
+  return `${spec.aiCode} / ${spec.defectName} / ${spec.side} / ${spec.unitDummy} / ${spec.area}`;
+}
+
 export function SpecListPage() {
   const specs = useSpecStore((state) => state.specs);
   const summary = useSpecStore((state) => state.summary);
@@ -78,10 +87,15 @@ export function SpecListPage() {
   const loadSpecs = useSpecStore((state) => state.loadSpecs);
   const [drafts, setDrafts] = useState<Record<string, ReviewDraft>>({});
   const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ReviewTab>('proposal');
 
   useEffect(() => {
     if (specs.length === 0) void loadSpecs();
   }, [loadSpecs, specs.length]);
+
+  const selectedSpec = specs.find((spec) => rowKey(spec) === selectedKey) ?? specs[0] ?? null;
+  const selectedDraft = selectedSpec ? getDraft(selectedSpec) : createDraft();
 
   function getDraft(spec: SpecRow) {
     return drafts[rowKey(spec)] ?? createDraft();
@@ -93,6 +107,10 @@ export function SpecListPage() {
       ...prev,
       [key]: { ...(prev[key] ?? createDraft()), ...patch },
     }));
+  }
+
+  function selectRow(spec: SpecRow) {
+    setSelectedKey(rowKey(spec));
   }
 
   async function saveRow(spec: SpecRow) {
@@ -145,71 +163,105 @@ export function SpecListPage() {
 
       <div className="table-toolbar">
         <span>{specs.length.toLocaleString()} spec rows</span>
-        <span className="muted">General Spec and discussion columns are editable per row.</span>
+        <span className="muted">Main grid keeps core comparison columns. Proposal and discussion fields are edited in tabs below.</span>
       </div>
 
-      <div className="table-card review-grid-card">
-        <div className="table-scroll">
-          <table className="review-grid-table">
-            <thead>
-              <tr>
-                <th>AI Code</th>
-                <th>Side</th>
-                <th>Unit/Dummy</th>
-                <th>Area</th>
-                <th>DefectName</th>
-                <th>MachineType</th>
-                <th>Defect Name MES</th>
-                <th>General Spec</th>
-                <th>AI RMS Spec</th>
-                <th>Spec Compare</th>
-                <th>Note</th>
-                <th>AI Team Proposal</th>
-                <th>Proposal Detail</th>
-                <th>Department</th>
-                <th>1st Discussion</th>
-                <th>2nd Discussion</th>
-                <th>Final</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {specs.map((spec) => {
-                const draft = getDraft(spec);
-                const key = rowKey(spec);
-                const machineType = spec.conditions[0]?.machineType ?? 'None';
-                return (
-                  <tr key={key}>
-                    <td className="code-cell"><Link to={'/specs/' + spec.aiCode}>{spec.aiCode}</Link></td>
-                    <td>{spec.side}</td>
-                    <td>{spec.unitDummy}</td>
-                    <td>{spec.area}</td>
-                    <td>{spec.defectName}</td>
-                    <td>{machineType}</td>
-                    <td><input className="grid-input" placeholder="MES name" /></td>
-                    <td><textarea className="grid-textarea" value={draft.generalSpecText} onChange={(event) => updateDraft(spec, { generalSpecText: event.target.value })} /></td>
-                    <td><pre className="grid-spec-text">{spec.aiSpecText}</pre></td>
-                    <td>
-                      <select className="grid-select" value={draft.compareResult} onChange={(event) => updateDraft(spec, { compareResult: event.target.value as CompareResult })}>
-                        {compareOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                      </select>
-                    </td>
-                    <td><textarea className="grid-textarea small" value={draft.note} onChange={(event) => updateDraft(spec, { note: event.target.value })} /></td>
-                    <td><input className="grid-input" value={draft.aiTeamProposal} onChange={(event) => updateDraft(spec, { aiTeamProposal: event.target.value })} /></td>
-                    <td><textarea className="grid-textarea small" value={draft.proposalDetail} onChange={(event) => updateDraft(spec, { proposalDetail: event.target.value })} /></td>
-                    <td><input className="grid-input" value={draft.department} onChange={(event) => updateDraft(spec, { department: event.target.value })} /></td>
-                    <td><textarea className="grid-textarea small" value={draft.firstDiscussionResult} onChange={(event) => updateDraft(spec, { firstDiscussionResult: event.target.value })} /></td>
-                    <td><textarea className="grid-textarea small" value={draft.secondDiscussionResult} onChange={(event) => updateDraft(spec, { secondDiscussionResult: event.target.value })} /></td>
-                    <td><input className="grid-input" value={draft.finalResult} onChange={(event) => updateDraft(spec, { finalResult: event.target.value })} /></td>
-                    <td className="action-cell">
-                      <button type="button" onClick={() => void saveRow(spec)} disabled={savingKey === key}>{savingKey === key ? 'Saving' : 'Save'}</button>
-                      <Link className="detail-link" to={'/specs/' + spec.aiCode}>Detail</Link>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      <div className="review-workspace">
+        <div className="table-card review-grid-card compact-grid-card">
+          <div className="table-scroll improved-table-scroll">
+            <table className="review-grid-table compact-review-grid-table">
+              <thead>
+                <tr>
+                  <th>AI Code</th>
+                  <th>Side</th>
+                  <th>Unit/Dummy</th>
+                  <th>Area</th>
+                  <th>DefectName</th>
+                  <th>MachineType</th>
+                  <th>Defect Name MES</th>
+                  <th>General Spec</th>
+                  <th>AI RMS Spec</th>
+                  <th>Spec Compare</th>
+                  <th>Note</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {specs.map((spec) => {
+                  const draft = getDraft(spec);
+                  const key = rowKey(spec);
+                  const machineType = spec.conditions[0]?.machineType ?? 'None';
+                  const isSelected = selectedSpec ? rowKey(selectedSpec) === key : false;
+                  return (
+                    <tr key={key} className={isSelected ? 'selected-grid-row' : ''} onClick={() => selectRow(spec)}>
+                      <td className="code-cell"><Link to={'/specs/' + spec.aiCode} onClick={(event) => event.stopPropagation()}>{spec.aiCode}</Link></td>
+                      <td>{spec.side}</td>
+                      <td>{spec.unitDummy}</td>
+                      <td>{spec.area}</td>
+                      <td>{spec.defectName}</td>
+                      <td>{machineType}</td>
+                      <td><input className="grid-input" value={draft.defectNameMes} onChange={(event) => updateDraft(spec, { defectNameMes: event.target.value })} onClick={(event) => event.stopPropagation()} placeholder="MES name" /></td>
+                      <td><textarea className="grid-textarea" value={draft.generalSpecText} onChange={(event) => updateDraft(spec, { generalSpecText: event.target.value })} onClick={(event) => event.stopPropagation()} /></td>
+                      <td><pre className="grid-spec-text">{spec.aiSpecText}</pre></td>
+                      <td>
+                        <select className="grid-select" value={draft.compareResult} onChange={(event) => updateDraft(spec, { compareResult: event.target.value as CompareResult })} onClick={(event) => event.stopPropagation()}>
+                          {compareOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </td>
+                      <td><textarea className="grid-textarea small" value={draft.note} onChange={(event) => updateDraft(spec, { note: event.target.value })} onClick={(event) => event.stopPropagation()} /></td>
+                      <td className="action-cell">
+                        <button type="button" onClick={(event) => { event.stopPropagation(); void saveRow(spec); }} disabled={savingKey === key}>{savingKey === key ? 'Saving' : 'Save'}</button>
+                        <Link className="detail-link" to={'/specs/' + spec.aiCode} onClick={(event) => event.stopPropagation()}>Detail</Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="review-tab-panel card">
+          <div className="tab-panel-header">
+            <div>
+              <b>Selected Review Row</b>
+              <p>{selectedRowLabel(selectedSpec)}</p>
+            </div>
+            {selectedSpec && <button type="button" onClick={() => void saveRow(selectedSpec)} disabled={savingKey === rowKey(selectedSpec)}>{savingKey === rowKey(selectedSpec) ? 'Saving' : 'Save Selected'}</button>}
+          </div>
+
+          <div className="tabs">
+            <button type="button" className={activeTab === 'proposal' ? 'active' : ''} onClick={() => setActiveTab('proposal')}>AI Team Proposal</button>
+            <button type="button" className={activeTab === 'discussion' ? 'active' : ''} onClick={() => setActiveTab('discussion')}>Discussion</button>
+            <button type="button" className={activeTab === 'final' ? 'active' : ''} onClick={() => setActiveTab('final')}>Final / History</button>
+          </div>
+
+          {selectedSpec && activeTab === 'proposal' && (
+            <div className="tab-content-grid">
+              <label><span>AI Team Proposal</span><input className="grid-input" value={selectedDraft.aiTeamProposal} onChange={(event) => updateDraft(selectedSpec, { aiTeamProposal: event.target.value })} /></label>
+              <label><span>Proposal Detail</span><textarea className="panel-textarea" value={selectedDraft.proposalDetail} onChange={(event) => updateDraft(selectedSpec, { proposalDetail: event.target.value })} /></label>
+            </div>
+          )}
+
+          {selectedSpec && activeTab === 'discussion' && (
+            <div className="tab-content-grid discussion-grid">
+              <label><span>Department</span><input className="grid-input" value={selectedDraft.department} onChange={(event) => updateDraft(selectedSpec, { department: event.target.value })} /></label>
+              <label><span>1st Discussion</span><textarea className="panel-textarea" value={selectedDraft.firstDiscussionResult} onChange={(event) => updateDraft(selectedSpec, { firstDiscussionResult: event.target.value })} /></label>
+              <label><span>2nd Discussion</span><textarea className="panel-textarea" value={selectedDraft.secondDiscussionResult} onChange={(event) => updateDraft(selectedSpec, { secondDiscussionResult: event.target.value })} /></label>
+            </div>
+          )}
+
+          {selectedSpec && activeTab === 'final' && (
+            <div className="tab-content-grid">
+              <label><span>Final Result</span><input className="grid-input" value={selectedDraft.finalResult} onChange={(event) => updateDraft(selectedSpec, { finalResult: event.target.value })} /></label>
+              <div className="mini-summary">
+                <b>Current Draft Summary</b>
+                <p>Compare: {selectedDraft.compareResult}</p>
+                <p>Department: {selectedDraft.department || '-'}</p>
+                <p>Final: {selectedDraft.finalResult || '-'}</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>
