@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useSpecStore } from '../stores/specStore';
-import type { CompareResultDetail, GeneralSpec, GeneralSpecCondition, ReviewRecord, UnavailableCondition } from '../types/domain';
+import type { CompareResultDetail, GeneralSpec, GeneralSpecCondition, ReviewRecord, SpecRow, UnavailableCondition } from '../types/domain';
 
 const API_BASE = 'http://localhost:8000/api';
 
@@ -16,6 +16,65 @@ function emptyGeneralSpec(aiCode: string): GeneralSpec {
     structuredConditions: [],
     unavailableConditions: [],
   };
+}
+
+function DetailSummary({ spec }: { spec: SpecRow }) {
+  return (
+    <div className="detail-summary-grid">
+      <div className="card"><b>AI Code</b><span>{spec.aiCode}</span></div>
+      <div className="card"><b>Defect</b><span>{spec.defectName}</span></div>
+      <div className="card"><b>Area</b><span>{spec.area || '-'}</span></div>
+      <div className="card"><b>Side</b><span>{spec.side || '-'}</span></div>
+      <div className="card"><b>Unit/Dummy</b><span>{spec.unitDummy || '-'}</span></div>
+      <div className="card"><b>Status</b><span>{spec.reviewStatus}</span></div>
+    </div>
+  );
+}
+
+function AiSpecConditionTable({ spec }: { spec: SpecRow }) {
+  return (
+    <div className="table-scroll">
+      <table className="condition-table">
+        <colgroup>
+          <col className="cond-measure" />
+          <col className="cond-op" />
+          <col className="cond-value" />
+          <col className="cond-unit" />
+          <col className="cond-machine" />
+          <col className="cond-default" />
+          <col className="cond-none" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Measurement</th>
+            <th>Op</th>
+            <th>Value</th>
+            <th>Unit</th>
+            <th>Machine</th>
+            <th>Default</th>
+            <th>No Measurement</th>
+          </tr>
+        </thead>
+        <tbody>
+          {spec.conditions.length === 0 ? (
+            <tr><td colSpan={7} className="muted">No AI Spec conditions.</td></tr>
+          ) : (
+            spec.conditions.map((condition, index) => (
+              <tr key={`${condition.measurementName}-${condition.operator}-${condition.value}-${index}`}>
+                <td className="strong-cell">{condition.measurementName}</td>
+                <td>{condition.operator}</td>
+                <td>{condition.value}</td>
+                <td>{condition.unit}</td>
+                <td>{condition.machineType}</td>
+                <td>{condition.defaultResultValue}</td>
+                <td>{condition.noMeasurementDefaultResult}</td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 export function SpecDetailPage() {
@@ -112,15 +171,33 @@ export function SpecDetailPage() {
   if (!selectedSpec) return <section className="page"><p>Loading...</p></section>;
 
   return (
-    <section className="page">
-      <h1>{selectedSpec.aiCode} / {selectedSpec.defectName}</h1>
-      <div className="two-column">
-        <div className="card">
-          <h2>AI Spec</h2>
-          <pre>{selectedSpec.aiSpecText}</pre>
-          <p>{selectedSpec.remark}</p>
+    <section className="page spec-detail-page">
+      <div className="detail-header">
+        <div>
+          <Link className="back-link" to="/specs">Back to Spec List</Link>
+          <h1>{selectedSpec.aiCode} / {selectedSpec.defectName}</h1>
+          <p className="muted">Review current AI Spec against General Spec and record discussion history.</p>
         </div>
-        <div className="card">
+      </div>
+
+      <DetailSummary spec={selectedSpec} />
+
+      <div className="detail-grid">
+        <div className="card stack detail-card-main">
+          <div className="section-title-row">
+            <h2>Current AI Spec</h2>
+            <span className="pill">{selectedSpec.conditions.length} conditions</span>
+          </div>
+          {selectedSpec.remark && (
+            <div className="remark-box"><b>Remark</b><p>{selectedSpec.remark}</p></div>
+          )}
+          <h3>Condition Table</h3>
+          <AiSpecConditionTable spec={selectedSpec} />
+          <h3>Raw Spec Text</h3>
+          <pre>{selectedSpec.aiSpecText}</pre>
+        </div>
+
+        <div className="card stack detail-card-side">
           <h2>General Spec</h2>
           <textarea value={generalSpec.rawText} onChange={(e) => setGeneralSpec({ ...generalSpec, rawText: e.target.value })} />
           <h3>Structured Conditions</h3>
@@ -153,10 +230,10 @@ export function SpecDetailPage() {
               }} />
             </div>
           ))}
-          <button onClick={saveGeneralSpec}>Save General Spec</button>
-          <button onClick={compare}>Compare</button>
+          <div className="button-row"><button onClick={saveGeneralSpec}>Save General Spec</button><button onClick={compare}>Compare</button></div>
         </div>
       </div>
+
       <div className="card">
         <h2>Compare Result</h2>
         <b>{compareResult?.result ?? 'NOT_REVIEWED'}</b>
