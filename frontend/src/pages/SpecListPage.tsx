@@ -19,6 +19,14 @@ type ReviewDraft = {
 type ReviewTab = 'proposal' | 'discussion' | 'final';
 
 const compareOptions: CompareResult[] = ['NOT_REVIEWED', 'STRICTER', 'LOOSER', 'SAME', 'PARTIAL', 'NOT_COMPARABLE'];
+const compareLabels: Record<CompareResult, string> = {
+  NOT_REVIEWED: '미검토',
+  STRICTER: '강화',
+  LOOSER: '완화',
+  SAME: '동일',
+  PARTIAL: '부분 적용',
+  NOT_COMPARABLE: '비교 불가',
+};
 const API_BASE = '/api';
 
 function createDraft(): ReviewDraft {
@@ -38,6 +46,17 @@ function createDraft(): ReviewDraft {
 
 function rowKey(spec: SpecRow) {
   return [spec.aiCode, spec.side, spec.unitDummy, spec.area].join('|');
+}
+
+function formatAiRmsSpecText(value: string) {
+  return value
+    .replace(/\bOK\b/g, '양품 조건')
+    .replace(/\bNG\b/g, '불량 조건')
+    .replace(/\bUnknown\b/g, '판정불가 조건')
+    .replace(/\bAI_OK\b/g, '양품 조건')
+    .replace(/\bAI_NG\b/g, '불량 조건')
+    .replace(/\bAI_UNKNOWN\b/g, '판정불가 조건')
+    .replace(/\bAI_UNKNOWN_NONE\b/g, '판정불가 조건');
 }
 
 function buildGeneralSpec(spec: SpecRow, draft: ReviewDraft): GeneralSpec {
@@ -76,7 +95,7 @@ function buildReviewRecord(spec: SpecRow, draft: ReviewDraft): ReviewRecord {
 }
 
 function selectedRowLabel(spec: SpecRow | null) {
-  if (!spec) return 'No row selected';
+  if (!spec) return '선택된 스펙 없음';
   return `${spec.aiCode} / ${spec.defectName} / ${spec.side} / ${spec.unitDummy} / ${spec.area}`;
 }
 
@@ -202,16 +221,16 @@ export function SpecListPage() {
                       <td>{machineType}</td>
                       <td><input className="grid-input" value={draft.defectNameMes} onChange={(event) => updateDraft(spec, { defectNameMes: event.target.value })} onClick={(event) => event.stopPropagation()} placeholder="MES name" /></td>
                       <td><textarea className="grid-textarea" value={draft.generalSpecText} onChange={(event) => updateDraft(spec, { generalSpecText: event.target.value })} onClick={(event) => event.stopPropagation()} /></td>
-                      <td><pre className="grid-spec-text">{spec.aiSpecText}</pre></td>
+                      <td><pre className="grid-spec-text">{formatAiRmsSpecText(spec.aiSpecText)}</pre></td>
                       <td>
                         <select className="grid-select" value={draft.compareResult} onChange={(event) => updateDraft(spec, { compareResult: event.target.value as CompareResult })} onClick={(event) => event.stopPropagation()}>
-                          {compareOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                          {compareOptions.map((option) => <option key={option} value={option}>{compareLabels[option]}</option>)}
                         </select>
                       </td>
                       <td><textarea className="grid-textarea small" value={draft.note} onChange={(event) => updateDraft(spec, { note: event.target.value })} onClick={(event) => event.stopPropagation()} /></td>
                       <td className="action-cell">
-                        <button type="button" onClick={(event) => { event.stopPropagation(); void saveRow(spec); }} disabled={savingKey === key}>{savingKey === key ? 'Saving' : 'Save'}</button>
-                        <Link className="detail-link" to={'/specs/' + spec.aiCode} onClick={(event) => event.stopPropagation()}>Detail</Link>
+                        <button type="button" onClick={(event) => { event.stopPropagation(); void saveRow(spec); }} disabled={savingKey === key}>{savingKey === key ? '저장중...' : '저장'}</button>
+                        <Link className="detail-link" to={'/specs/' + spec.aiCode} onClick={(event) => event.stopPropagation()}>상세보기</Link>
                       </td>
                     </tr>
                   );
@@ -224,16 +243,16 @@ export function SpecListPage() {
         <div className="review-tab-panel card">
           <div className="tab-panel-header">
             <div>
-              <b>Selected Review Row</b>
+              <b>선택된 스펙</b>
               <p>{selectedRowLabel(selectedSpec)}</p>
             </div>
-            {selectedSpec && <button type="button" onClick={() => void saveRow(selectedSpec)} disabled={savingKey === rowKey(selectedSpec)}>{savingKey === rowKey(selectedSpec) ? 'Saving' : 'Save Selected'}</button>}
+            {selectedSpec && <button type="button" onClick={() => void saveRow(selectedSpec)} disabled={savingKey === rowKey(selectedSpec)}>{savingKey === rowKey(selectedSpec) ? '저장중...' : '선택 항목 저장'}</button>}
           </div>
 
           <div className="tabs">
-            <button type="button" className={activeTab === 'proposal' ? 'active' : ''} onClick={() => setActiveTab('proposal')}>AI Team Proposal</button>
-            <button type="button" className={activeTab === 'discussion' ? 'active' : ''} onClick={() => setActiveTab('discussion')}>Discussion</button>
-            <button type="button" className={activeTab === 'final' ? 'active' : ''} onClick={() => setActiveTab('final')}>Final / History</button>
+            <button type="button" className={activeTab === 'proposal' ? 'active' : ''} onClick={() => setActiveTab('proposal')}>AI팀 제안</button>
+            <button type="button" className={activeTab === 'discussion' ? 'active' : ''} onClick={() => setActiveTab('discussion')}>협의 내용</button>
+            <button type="button" className={activeTab === 'final' ? 'active' : ''} onClick={() => setActiveTab('final')}>최종 결과 / 이력</button>
           </div>
 
           {selectedSpec && activeTab === 'proposal' && (
@@ -256,7 +275,7 @@ export function SpecListPage() {
               <label><span>Final Result</span><input className="grid-input" value={selectedDraft.finalResult} onChange={(event) => updateDraft(selectedSpec, { finalResult: event.target.value })} /></label>
               <div className="mini-summary">
                 <b>Current Draft Summary</b>
-                <p>Compare: {selectedDraft.compareResult}</p>
+                <p>Compare: {compareLabels[selectedDraft.compareResult]}</p>
                 <p>Department: {selectedDraft.department || '-'}</p>
                 <p>Final: {selectedDraft.finalResult || '-'}</p>
               </div>
